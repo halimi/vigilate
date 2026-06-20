@@ -9,10 +9,19 @@ import (
 
 	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/v2"
+	"github.com/halimi/vigilate/internal/channeldata"
 	"github.com/halimi/vigilate/internal/driver"
 )
 
-var session *scs.SessionManager
+var (
+	session       *scs.SessionManager
+	preferenceMap map[string]string
+)
+
+const (
+	maxWorkerPoolSize = 5
+	maxJobMaxWorkers  = 5
+)
 
 func setupApp() (*string, error) {
 	insecurePort := flag.String("port", ":4000", "port to listen on")
@@ -47,6 +56,13 @@ func setupApp() (*string, error) {
 	session.Cookie.Name = fmt.Sprintf("gbsession_id_%s", *identifier)
 	session.Cookie.SameSite = http.SameSiteLaxMode
 	session.Cookie.Secure = *inProduction
+
+	log.Println("Initializing mail channel and worker pool...")
+	mailQueue := make(chan channeldata.MailJob, maxWorkerPoolSize)
+
+	log.Println("Starting email dispatcher...")
+	dispatcher := NewDispatcher(mailQueue, maxJobMaxWorkers)
+	dispatcher.run()
 
 	log.Println(domain)
 
